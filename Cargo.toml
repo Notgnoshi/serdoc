@@ -1,0 +1,8 @@
+[package]
+name = "serdoc"
+version = "0.1.0"
+edition = "2021"
+description = "An experiment to serialize Rust structs to TOML, while preserving field docstrings."
+readme = "README.md"
+
+[dependencies]
