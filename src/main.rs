@@ -1,3 +1,8 @@
+mod config;
+use clap::Parser;
+
 fn main() {
-    println!("hello world");
+    let config = config::CliConfig::parse();
+
+    println!("CLI config: {config:?}");
 }
