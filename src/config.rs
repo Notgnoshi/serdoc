@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
-use struct_field_names_as_array::FieldNamesAsArray;
+use struct_field_names_as_array::FieldNamesAsSlice;
 
 #[derive(Debug, Parser)]
 pub struct CliConfig {
@@ -17,33 +17,20 @@ pub struct CliConfig {
 
     // The rest of the CLI arguments
     #[clap(flatten)]
-    pub config: Config,
+    pub nullable_config: NullableConfig,
 }
 
 /// Application configuration
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Documented,
-    DocumentedFields,
-    Deserialize,
-    Serialize,
-    FieldNamesAsArray,
-    Parser,
-)]
+#[derive(Debug, Clone, Documented, DocumentedFields, Deserialize, Serialize, FieldNamesAsSlice)]
 pub struct Config {
     /// A placeholder config option
-    // NOTE: Unfortunately you _do_ have to duplicate the default value here
-    #[clap(long, default_value_t = 42)]
     pub placeholder1: u32,
 
     /// Another placeholder config option
-    #[clap(long, default_value = "example")]
     pub placeholder2: String,
 }
 
+// NOTE: This is the only place you should add default values for Config or NullableConfig fields.
 impl Default for Config {
     fn default() -> Config {
         Config {
@@ -51,6 +38,20 @@ impl Default for Config {
             placeholder2: String::from("example"),
         }
     }
+}
+
+/// Application configuration
+#[derive(Debug, Clone, Documented, DocumentedFields, Serialize, FieldNamesAsSlice, Parser)]
+pub struct NullableConfig {
+    /// A placeholder config option
+    #[clap(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder1: Option<u32>,
+
+    /// Another placeholder config option
+    #[clap(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub placeholder2: Option<String>,
 }
 
 impl Config {
@@ -107,7 +108,7 @@ mod tests {
     fn every_config_field_has_documentation() {
         assert!(!Config::DOCS.is_empty(), "Config missing documentation");
 
-        for field in Config::FIELD_NAMES_AS_ARRAY {
+        for field in Config::FIELD_NAMES_AS_SLICE {
             let docstring = Config::get_field_comment(field);
             assert!(docstring.is_ok(), "Config::{field} missing documentation");
             assert!(
@@ -115,6 +116,25 @@ mod tests {
                 "Config::{field} has empty docstring"
             );
         }
+    }
+
+    #[test]
+    fn nullable_config_matches_config() {
+        assert_eq!(
+            Config::FIELD_NAMES_AS_SLICE,
+            NullableConfig::FIELD_NAMES_AS_SLICE,
+            "Config and NullableConfig must have the same fields, in the same order"
+        );
+        assert_eq!(
+            Config::DOCS,
+            NullableConfig::DOCS,
+            "Config and NullableConfig's documentation must be identical"
+        );
+        assert_eq!(
+            Config::FIELD_DOCS,
+            NullableConfig::FIELD_DOCS,
+            "Config and NullableConfig field's must have the same documentation"
+        );
     }
 
     #[test]
