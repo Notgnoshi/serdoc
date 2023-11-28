@@ -8,7 +8,7 @@ use struct_field_names_as_array::FieldNamesAsArray;
 #[derive(Debug, Parser)]
 pub struct CliConfig {
     /// Path to config directory
-    #[clap(short = 'C', long, default_value = ".")]
+    #[clap(short = 'C', long, default_value = "./configs/")]
     pub config_dir: PathBuf,
 
     /// Disable reading config files from the --config-dir

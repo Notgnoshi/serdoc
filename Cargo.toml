@@ -9,6 +9,7 @@ readme = "README.md"
 anyhow = "1.0.75"
 clap = { version = "4.4.10", features = ["derive"] }
 documented = "0.2.0"
+figment = { version = "0.10.12", features = ["toml"] }
 pretty_assertions = "1.4.0"
 serde = { version = "1.0.193", features = ["derive"] }
 struct-field-names-as-array = "0.3.0"
