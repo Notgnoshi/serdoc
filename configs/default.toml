@@ -1,0 +1,10 @@
+# Application configuration
+
+# A placeholder config option
+placeholder1 = 42
+
+# Another placeholder config option
+placeholder2 = "example"
+
+# A config value that is required
+required1 = ""
