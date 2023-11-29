@@ -1,6 +1,7 @@
 use clap::Parser;
 use figment::providers::{Format, Serialized, Toml};
 use figment::Figment;
+use struct_field_names_as_array::FieldNamesAsSlice;
 
 use crate::config::{CliConfig, Config};
 
@@ -10,6 +11,27 @@ pub fn get_layered_configs() -> anyhow::Result<Config> {
     Ok(config)
 }
 
+fn log_overrides(bottom_layer: &Figment, top_layer: &Figment, top_name: &str) {
+    for field in Config::FIELD_NAMES_AS_SLICE {
+        let bottom_value = bottom_layer.find_value(field);
+        let top_value = top_layer.find_value(field);
+        match (bottom_value, top_value) {
+            // Both layers provided a value for that field. Only log if the top layer is different
+            (Ok(b), Ok(t)) => {
+                if b != t {
+                    log::info!("Config field '{field}' overridden by {top_name} to {t:?}");
+                }
+            }
+            // The bottom layer didn't provide a value, but the top layer did
+            (Err(_), Ok(t)) => {
+                log::debug!("Config field '{field}' set by {top_name} to {t:?}");
+            }
+            (Ok(_b), Err(_)) => {}
+            (Err(_), Err(_)) => {}
+        }
+    }
+}
+
 pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
     // Use Config::default() as the base layer, so that at every layer, we can successfully
     // serialize to a Config, as well as being able to leave the config files and CLI args empty.
@@ -17,7 +39,7 @@ pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
     // However, don't Use this as the bottom layer in the stack until the end, so that we can
     // detect missing required fields.
     let defaults = Figment::new().merge(Serialized::defaults(Config::default()));
-    let mut builder = Figment::new();
+    let mut config_files = Figment::new();
 
     // Only require the config dir to exist if we're using it
     if !cli.no_config {
@@ -29,28 +51,36 @@ pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
         }
         // This doesn't require the config files to exist, or for them to contain anything.
         let layer1 = cli.config_dir.join("layer1.toml");
+        let layer1 = Figment::new().merge(Toml::file(layer1));
+        log_overrides(&defaults, &layer1, "layer1.toml");
+
         let layer2 = cli.config_dir.join("layer2.toml");
-        builder = builder.merge(Toml::file(layer1)).merge(Toml::file(layer2));
+        let layer2 = layer1.clone().merge(Toml::file(layer2));
+        log_overrides(&layer1, &layer2, "layer2.toml");
+
+        config_files = layer2;
     }
     // Finally, overlay the nullable CLI arguments over the top. The CLI config is nullable, so
     // that only CLI arguments that are provided by the user are merged with the bottom layers.
-    builder = builder.merge(Serialized::defaults(cli.nullable_config));
+    let cli = config_files
+        .clone()
+        .merge(Serialized::defaults(cli.nullable_config));
+    log_overrides(&config_files, &cli, "CLI");
 
     // Check for missing required values before adding the default values as the bottom layer.
     for field in Config::REQUIRED_FIELDS {
-        if builder.find_value(field).is_err() {
+        if cli.find_value(field).is_err() {
             anyhow::bail!("Missing required config value '{field}'");
         }
     }
 
     // Insert the default values as the bottom layer
-    builder = defaults.merge(builder);
-
-    let overlaid_config: Config = builder.extract()?;
+    let overlaid_config: Config = defaults.merge(cli).extract()?;
 
     Ok(overlaid_config)
 }
 
+// TODO: Initialize logging in tests
 #[cfg(test)]
 mod tests {
     use std::fs::File;
