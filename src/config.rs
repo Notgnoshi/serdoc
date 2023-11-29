@@ -5,7 +5,7 @@ use documented::{Documented, DocumentedFields};
 use serde::{Deserialize, Serialize};
 use struct_field_names_as_array::FieldNamesAsSlice;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 pub struct CliConfig {
     /// Path to config directory
     #[clap(short = 'C', long, default_value = "./configs/")]
@@ -21,7 +21,17 @@ pub struct CliConfig {
 }
 
 /// Application configuration
-#[derive(Debug, Clone, Documented, DocumentedFields, Deserialize, Serialize, FieldNamesAsSlice)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Documented,
+    DocumentedFields,
+    Deserialize,
+    Serialize,
+    FieldNamesAsSlice,
+)]
 pub struct Config {
     /// A placeholder config option
     pub placeholder1: u32,
@@ -41,7 +51,9 @@ impl Default for Config {
 }
 
 /// Application configuration
-#[derive(Debug, Clone, Documented, DocumentedFields, Serialize, FieldNamesAsSlice, Parser)]
+#[derive(
+    Default, Debug, Clone, Documented, DocumentedFields, Serialize, FieldNamesAsSlice, Parser,
+)]
 pub struct NullableConfig {
     /// A placeholder config option
     #[clap(long)]
