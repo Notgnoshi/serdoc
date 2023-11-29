@@ -40,11 +40,8 @@ pub struct Config {
     pub placeholder2: String,
 
     /// A config value that is required
-    // TODO: I don't like that a required field is an Option.
-    pub required1: Option<String>,
+    pub required1: String,
 }
-
-pub const REQUIRED_CONFIG_FILES: [&str; 1] = ["required1"];
 
 // NOTE: This is the only place you should add default values for Config or NullableConfig fields.
 impl Default for Config {
@@ -52,7 +49,7 @@ impl Default for Config {
         Config {
             placeholder1: 42,
             placeholder2: String::from("example"),
-            required1: None,
+            required1: String::new(),
         }
     }
 }
@@ -79,6 +76,8 @@ pub struct NullableConfig {
 }
 
 impl Config {
+    pub const REQUIRED_FIELDS: [&str; 1] = ["required1"];
+
     #[cfg(test)]
     fn docstring_to_toml_comment(docstring: &str) -> String {
         let mut toml_comment = String::new();

@@ -13,7 +13,11 @@ pub fn get_layered_configs() -> anyhow::Result<Config> {
 pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
     // Use Config::default() as the base layer, so that at every layer, we can successfully
     // serialize to a Config, as well as being able to leave the config files and CLI args empty.
-    let mut builder = Figment::new().merge(Serialized::defaults(Config::default()));
+    //
+    // However, don't Use this as the bottom layer in the stack until the end, so that we can
+    // detect missing required fields.
+    let defaults = Figment::new().merge(Serialized::defaults(Config::default()));
+    let mut builder = Figment::new();
 
     // Only require the config dir to exist if we're using it
     if !cli.no_config {
@@ -30,14 +34,19 @@ pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
     }
     // Finally, overlay the nullable CLI arguments over the top. The CLI config is nullable, so
     // that only CLI arguments that are provided by the user are merged with the bottom layers.
-    let overlaid_config: Config = builder
-        .merge(Serialized::defaults(cli.nullable_config))
-        .extract()?;
+    builder = builder.merge(Serialized::defaults(cli.nullable_config));
 
-    // TODO: Is there a way for required fields to be non-Options in the final deserialized struct?
-    if overlaid_config.required1.is_none() {
-        anyhow::bail!("Missing required config value 'required1'");
+    // Check for missing required values before adding the default values as the bottom layer.
+    for field in Config::REQUIRED_FIELDS {
+        if builder.find_value(field).is_err() {
+            anyhow::bail!("Missing required config value '{field}'");
+        }
     }
+
+    // Insert the default values as the bottom layer
+    builder = defaults.merge(builder);
+
+    let overlaid_config: Config = builder.extract()?;
 
     Ok(overlaid_config)
 }
@@ -92,12 +101,9 @@ mod tests {
     #[test]
     fn disable_config_files() {
         let mut fixture = ConfigFixture::new().unwrap();
-        let mut expected = Config {
-            required1: Some("foo".into()),
-            ..Default::default()
-        };
+        let mut expected = Config::default();
 
-        fixture.cli.nullable_config.required1 = Some("foo".into());
+        fixture.cli.nullable_config.required1 = Some(String::from(""));
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
 
@@ -108,20 +114,45 @@ mod tests {
 
         fixture.cli.no_config = true;
         expected = Config::default();
-        expected.required1 = Some("foo".into());
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn required_fields_must_be_set() {
+        let mut fixture = ConfigFixture::new().unwrap();
+
+        // required1 not set, should return an Err
+        let result = get_layered_configs_from_cli(fixture.cli.clone());
+        assert!(result.is_err());
+
+        // Set from a config file, even if to an empty string
+        writeln!(fixture.layer1, "required1 = \"\"").unwrap();
+        let result = get_layered_configs_from_cli(fixture.cli.clone());
+        assert!(result.is_ok());
+        let actual = result.unwrap();
+        let expected = Config::default();
+        assert_eq!(actual, expected);
+
+        // Set from the CLI
+        let mut fixture = ConfigFixture::new().unwrap();
+        fixture.cli.nullable_config.required1 = Some(String::from("foo"));
+        let result = get_layered_configs_from_cli(fixture.cli.clone());
+        assert!(result.is_ok());
+        let actual = result.unwrap();
+        let expected = Config {
+            required1: String::from("foo"),
+            ..Default::default()
+        };
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn each_layer_overrides_the_previous() {
         let mut fixture = ConfigFixture::new().unwrap();
-        let mut expected = Config {
-            required1: Some("foo".into()),
-            ..Default::default()
-        };
-        writeln!(fixture.layer1, "required1 = \"foo\"").unwrap();
+        let mut expected = Config::default();
 
+        writeln!(fixture.layer1, "required1 = \"\"").unwrap();
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
 
@@ -148,7 +179,7 @@ mod tests {
         assert_eq!(actual, expected);
 
         fixture.cli.nullable_config.required1 = Some("bar".into());
-        expected.required1 = Some("bar".into());
+        expected.required1 = String::from("bar");
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
     }
