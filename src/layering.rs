@@ -33,6 +33,12 @@ pub fn get_layered_configs_from_cli(cli: CliConfig) -> anyhow::Result<Config> {
     let overlaid_config: Config = builder
         .merge(Serialized::defaults(cli.nullable_config))
         .extract()?;
+
+    // TODO: Is there a way for required fields to be non-Options in the final deserialized struct?
+    if overlaid_config.required1.is_none() {
+        anyhow::bail!("Missing required config value 'required1'");
+    }
+
     Ok(overlaid_config)
 }
 
@@ -86,8 +92,12 @@ mod tests {
     #[test]
     fn disable_config_files() {
         let mut fixture = ConfigFixture::new().unwrap();
-        let mut expected = Config::default();
+        let mut expected = Config {
+            required1: Some("foo".into()),
+            ..Default::default()
+        };
 
+        fixture.cli.nullable_config.required1 = Some("foo".into());
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
 
@@ -98,6 +108,7 @@ mod tests {
 
         fixture.cli.no_config = true;
         expected = Config::default();
+        expected.required1 = Some("foo".into());
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
     }
@@ -105,7 +116,11 @@ mod tests {
     #[test]
     fn each_layer_overrides_the_previous() {
         let mut fixture = ConfigFixture::new().unwrap();
-        let mut expected = Config::default();
+        let mut expected = Config {
+            required1: Some("foo".into()),
+            ..Default::default()
+        };
+        writeln!(fixture.layer1, "required1 = \"foo\"").unwrap();
 
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
@@ -129,6 +144,11 @@ mod tests {
         // the config files! (This is tricky, and is why NullableConfig exists)
         fixture.cli.nullable_config.placeholder1 = Some(42);
         expected.placeholder1 = 42;
+        let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
+        assert_eq!(actual, expected);
+
+        fixture.cli.nullable_config.required1 = Some("bar".into());
+        expected.required1 = Some("bar".into());
         let actual = get_layered_configs_from_cli(fixture.cli.clone()).unwrap();
         assert_eq!(actual, expected);
     }

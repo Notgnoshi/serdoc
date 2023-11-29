@@ -38,7 +38,13 @@ pub struct Config {
 
     /// Another placeholder config option
     pub placeholder2: String,
+
+    /// A config value that is required
+    // TODO: I don't like that a required field is an Option.
+    pub required1: Option<String>,
 }
+
+pub const REQUIRED_CONFIG_FILES: [&str; 1] = ["required1"];
 
 // NOTE: This is the only place you should add default values for Config or NullableConfig fields.
 impl Default for Config {
@@ -46,6 +52,7 @@ impl Default for Config {
         Config {
             placeholder1: 42,
             placeholder2: String::from("example"),
+            required1: None,
         }
     }
 }
@@ -64,6 +71,11 @@ pub struct NullableConfig {
     #[clap(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub placeholder2: Option<String>,
+
+    /// A config value that is required
+    #[clap(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub required1: Option<String>,
 }
 
 impl Config {
